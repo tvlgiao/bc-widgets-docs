@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI HTML Widget — Visual Editor Mockup</title>
+<style>
+  :root{
+    --pt-bg:#0f1117; --pt-surface:#171a23; --pt-surface-2:#1f232f; --pt-line:#2a2f3d;
+    --pt-text:#e6e9f0; --pt-muted:#8b93a7; --pt-accent:#5b8cff; --pt-accent-2:#4f46e5;
+    --pt-warn-bg:#3a2a12; --pt-warn:#f4b740; --pt-good:#2ecc71; --pt-danger:#ff5d6c;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--pt-bg); color:var(--pt-text); overflow:hidden;
+  }
+  .app{display:flex; height:100vh}
+
+  /* ── Left: fake Page Builder + storefront preview ── */
+  .stage-wrap{flex:1; display:flex; flex-direction:column; min-width:0}
+  .pb-bar{
+    display:flex; align-items:center; gap:14px; padding:10px 16px;
+    background:var(--pt-surface); border-bottom:1px solid var(--pt-line);
+  }
+  .pb-bar .brand{font-weight:600; color:var(--pt-muted); letter-spacing:.02em}
+  .device-toggle{display:flex; gap:4px; margin-left:auto; background:var(--pt-surface-2); padding:4px; border-radius:10px}
+  .device-toggle button{
+    border:0; background:transparent; color:var(--pt-muted); padding:6px 12px;
+    border-radius:7px; cursor:pointer; font-size:13px; font-weight:500;
+  }
+  .device-toggle button.active{background:var(--pt-accent-2); color:#fff}
+  .hint{color:var(--pt-muted); font-size:12px}
+
+  .preview-scroll{flex:1; overflow:auto; padding:28px; display:flex; justify-content:center; background:#0b0d12}
+  .preview-stage{
+    width:1280px; max-width:100%; background:#ffffff; border-radius:10px; position:relative;
+    transition:width .25s ease; box-shadow:0 18px 50px rgba(0,0,0,.45); color:#1e293b;
+    min-height:520px;
+  }
+  .device-label{
+    position:absolute; top:-22px; left:0; font-size:11px; color:var(--pt-muted);
+  }
+  /* selection overlay */
+  #sel-overlay{
+    position:absolute; pointer-events:none; border:2px solid var(--pt-accent);
+    border-radius:4px; box-shadow:0 0 0 9999px rgba(0,0,0,0); display:none; z-index:5;
+    transition:all .08s linear;
+  }
+  #hover-overlay{
+    position:absolute; pointer-events:none; border:1px dashed #94a3b8; border-radius:4px;
+    display:none; z-index:4;
+  }
+  [data-editable]{cursor:pointer}
+
+  /* ── Sample AI-generated widget (class-based, scoped) ── */
+  .pt-w{padding:40px}
+  .pt-w-hero{
+    background:#f8fafc; border:1px solid #e2e8f0; border-radius:16px; padding:40px;
+    text-align:center; margin-bottom:28px;
+  }
+  .pt-w-title{margin:0 0 10px; font-size:30px; font-weight:700; color:#0f172a; letter-spacing:-.02em}
+  .pt-w-sub{margin:0; font-size:16px; color:#64748b; line-height:1.6}
+  .pt-w-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:18px}
+  .pt-w-card{
+    background:#ffffff; border:1px solid #e2e8f0; border-radius:14px; padding:24px;
+    text-align:left;
+  }
+  .pt-w-card h3{margin:0 0 8px; font-size:18px; color:#1e293b}
+  .pt-w-card p{margin:0; font-size:14px; color:#64748b}
+
+  /* ── Right: Design panel ── */
+  .panel{
+    width:340px; flex:none; background:var(--pt-surface); border-left:1px solid var(--pt-line);
+    display:flex; flex-direction:column; height:100vh;
+  }
+  .panel-head{padding:12px 14px; border-bottom:1px solid var(--pt-line)}
+  .mode-tabs{display:flex; gap:4px; background:var(--pt-surface-2); padding:4px; border-radius:10px; margin-bottom:12px}
+  .mode-tabs button{flex:1; border:0; background:transparent; color:var(--pt-muted); padding:7px; border-radius:7px; cursor:pointer; font-weight:600}
+  .mode-tabs button.active{background:var(--pt-accent); color:#fff}
+  .save-row{display:flex; align-items:center; gap:8px}
+  .dirty-dot{width:8px; height:8px; border-radius:50%; background:#3a3f4d; flex:none}
+  .dirty-dot.on{background:var(--pt-warn); box-shadow:0 0 0 4px rgba(244,183,64,.15)}
+  .dirty-text{font-size:12px; color:var(--pt-muted); flex:1}
+  .btn{border:0; border-radius:8px; padding:7px 12px; font-weight:600; cursor:pointer; font-size:13px}
+  .btn-save{background:var(--pt-accent-2); color:#fff}
+  .btn-save:disabled{opacity:.4; cursor:not-allowed}
+  .btn-ghost{background:transparent; color:var(--pt-muted); border:1px solid var(--pt-line)}
+
+  .panel-body{flex:1; overflow:auto; padding:14px}
+  .empty{color:var(--pt-muted); text-align:center; padding:48px 12px; font-size:13px}
+  .empty svg{opacity:.4; margin-bottom:10px}
+
+  .sel-head{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:6px}
+  .sel-tag{background:var(--pt-surface-2); border:1px solid var(--pt-line); border-radius:6px; padding:3px 8px; font-size:12px; color:var(--pt-accent)}
+  .sel-class{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; color:var(--pt-text)}
+  .affects{display:none; align-items:center; gap:5px; background:var(--pt-warn-bg); color:var(--pt-warn);
+    border-radius:6px; padding:3px 8px; font-size:11.5px; font-weight:600}
+  .affects.on{display:inline-flex}
+
+  .bp-row{display:flex; gap:6px; margin:14px 0}
+  .bp-row button{flex:1; border:1px solid var(--pt-line); background:var(--pt-surface-2); color:var(--pt-muted);
+    padding:8px 6px; border-radius:8px; cursor:pointer; font-size:12px; display:flex; flex-direction:column; align-items:center; gap:3px}
+  .bp-row button.active{border-color:var(--pt-accent); color:#fff; background:rgba(91,140,255,.12)}
+  .bp-note{font-size:11px; color:var(--pt-muted); margin:-6px 0 12px}
+  .bp-note b{color:var(--pt-accent)}
+
+  .sec{border-top:1px solid var(--pt-line); padding:14px 0}
+  .sec:first-of-type{border-top:0}
+  .sec h4{margin:0 0 10px; font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--pt-muted)}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:8px}
+  .grid4{display:grid; grid-template-columns:repeat(4,1fr); gap:6px}
+  .field{display:flex; flex-direction:column; gap:4px}
+  .field label{font-size:11px; color:var(--pt-muted)}
+  .field input,.field select{
+    background:var(--pt-surface-2); border:1px solid var(--pt-line); color:var(--pt-text);
+    border-radius:7px; padding:6px 8px; font-size:13px; width:100%;
+  }
+  .field input[type=color]{padding:2px; height:32px}
+  .boxmodel{background:var(--pt-surface-2); border:1px solid var(--pt-line); border-radius:10px; padding:10px}
+  .boxmodel .lbl{font-size:10px; color:var(--pt-muted); text-align:center; margin-bottom:6px}
+  .align-row{display:flex; gap:6px}
+  .align-row button{flex:1; background:var(--pt-surface-2); border:1px solid var(--pt-line); color:var(--pt-muted);
+    border-radius:7px; padding:8px; cursor:pointer}
+  .align-row button.active{border-color:var(--pt-accent); color:#fff}
+  textarea.txt{width:100%; min-height:54px; resize:vertical; background:var(--pt-surface-2);
+    border:1px solid var(--pt-line); color:var(--pt-text); border-radius:7px; padding:8px; font-size:13px}
+
+  .toast{position:fixed; bottom:20px; left:50%; transform:translateX(-50%) translateY(20px);
+    background:var(--pt-good); color:#08110a; padding:10px 18px; border-radius:10px; font-weight:600;
+    opacity:0; transition:.25s; pointer-events:none; z-index:50}
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+  .legend{position:fixed; bottom:14px; left:14px; font-size:11px; color:#5b6172; max-width:340px}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- LEFT -->
+  <div class="stage-wrap">
+    <div class="pb-bar">
+      <span class="brand">▦ Page Builder — Preview</span>
+      <span class="hint">click an element to edit →</span>
+      <div class="device-toggle" id="deviceToggle">
+        <button data-bp="desktop" data-w="1280" class="active">🖥 Desktop</button>
+        <button data-bp="tablet"  data-w="834">▭ Tablet</button>
+        <button data-bp="mobile"  data-w="390">▯ Mobile</button>
+      </div>
+    </div>
+
+    <div class="preview-scroll">
+      <div class="preview-stage" id="stage">
+        <span class="device-label" id="deviceLabel">1280px · Desktop</span>
+        <div id="hover-overlay"></div>
+        <div id="sel-overlay"></div>
+
+        <!-- sample AI-generated widget: class-based, every element has its own class -->
+        <div class="pt-w" data-editable data-cls="pt-w">
+          <div class="pt-w-hero" data-editable data-cls="pt-w-hero">
+            <h2 class="pt-w-title" data-editable data-cls="pt-w-title">AI HTML Generator</h2>
+            <p class="pt-w-sub" data-editable data-cls="pt-w-sub">Edit text, spacing, colors, type — visually, per breakpoint.</p>
+          </div>
+          <div class="pt-w-grid" data-editable data-cls="pt-w-grid">
+            <div class="pt-w-card" data-editable data-cls="pt-w-card">
+              <h3 data-editable data-cls="pt-w-card-h">Fast</h3>
+              <p data-editable data-cls="pt-w-card-p">No chat needed.</p>
+            </div>
+            <div class="pt-w-card" data-editable data-cls="pt-w-card">
+              <h3 data-editable data-cls="pt-w-card-h">Precise</h3>
+              <p data-editable data-cls="pt-w-card-p">Click and tune.</p>
+            </div>
+            <div class="pt-w-card" data-editable data-cls="pt-w-card">
+              <h3 data-editable data-cls="pt-w-card-h">Responsive</h3>
+              <p data-editable data-cls="pt-w-card-p">Per device.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: Design panel -->
+  <aside class="panel">
+    <div class="panel-head">
+      <div class="mode-tabs">
+        <button class="active">Design</button>
+        <button>Chat</button>
+      </div>
+      <div class="save-row">
+        <span class="dirty-dot" id="dirtyDot"></span>
+        <span class="dirty-text" id="dirtyText">No unsaved changes</span>
+        <button class="btn btn-ghost" id="discardBtn" disabled>Discard</button>
+        <button class="btn btn-save" id="saveBtn" disabled>Save changes</button>
+      </div>
+    </div>
+
+    <div class="panel-body" id="panelBody">
+      <!-- empty state -->
+      <div class="empty" id="emptyState">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z"/></svg>
+        <div>Click any element in the preview to edit it.</div>
+      </div>
+
+      <!-- editing state -->
+      <div id="editState" style="display:none">
+        <div class="sel-head">
+          <span class="sel-tag" id="selTag">div</span>
+          <span class="sel-class" id="selClass">.pt-w</span>
+          <span class="affects" id="affects">⚠ affects <b id="affectsN">3</b> elements</span>
+        </div>
+
+        <div class="bp-row" id="bpRow">
+          <button data-bp="desktop" class="active">🖥<span>Desktop</span></button>
+          <button data-bp="tablet">▭<span>Tablet</span></button>
+          <button data-bp="mobile">▯<span>Mobile</span></button>
+        </div>
+        <div class="bp-note">Active breakpoint <b id="bpNote">auto-follows width</b>. Edits here write to <b id="bpTarget">base styles</b>.</div>
+
+        <div class="sec">
+          <h4>Text</h4>
+          <textarea class="txt" id="cText" placeholder="(element has no direct text)"></textarea>
+        </div>
+
+        <div class="sec">
+          <h4>Spacing — padding</h4>
+          <div class="boxmodel">
+            <div class="lbl">padding (px)</div>
+            <div class="grid4">
+              <div class="field"><label>top</label><input type="number" data-p="padding-top"></div>
+              <div class="field"><label>right</label><input type="number" data-p="padding-right"></div>
+              <div class="field"><label>bottom</label><input type="number" data-p="padding-bottom"></div>
+              <div class="field"><label>left</label><input type="number" data-p="padding-left"></div>
+            </div>
+          </div>
+          <div style="height:8px"></div>
+          <div class="boxmodel">
+            <div class="lbl">margin (px)</div>
+            <div class="grid4">
+              <div class="field"><label>top</label><input type="number" data-p="margin-top"></div>
+              <div class="field"><label>right</label><input type="number" data-p="margin-right"></div>
+              <div class="field"><label>bottom</label><input type="number" data-p="margin-bottom"></div>
+              <div class="field"><label>left</label><input type="number" data-p="margin-left"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <h4>Color</h4>
+          <div class="grid2">
+            <div class="field"><label>text</label><input type="color" data-p="color"></div>
+            <div class="field"><label>background</label><input type="color" data-p="background-color"></div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <h4>Typography</h4>
+          <div class="field"><label>font-family</label>
+            <select data-p="font-family">
+              <option>inherit</option>
+              <option>-apple-system, system-ui, sans-serif</option>
+              <option>Georgia, serif</option>
+              <option>"Courier New", monospace</option>
+              <option>Poppins, sans-serif</option>
+            </select>
+          </div>
+          <div style="height:8px"></div>
+          <div class="grid2">
+            <div class="field"><label>size (px)</label><input type="number" data-p="font-size"></div>
+            <div class="field"><label>weight</label>
+              <select data-p="font-weight"><option>300</option><option>400</option><option>500</option><option>600</option><option>700</option><option>800</option></select>
+            </div>
+            <div class="field"><label>line-height</label><input type="number" step="0.1" data-p="line-height-u"></div>
+            <div class="field"><label>letter-spacing</label><input type="number" step="0.5" data-p="letter-spacing"></div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <h4>Border</h4>
+          <div class="grid2">
+            <div class="field"><label>width (px)</label><input type="number" data-p="border-width"></div>
+            <div class="field"><label>style</label>
+              <select data-p="border-style"><option>none</option><option>solid</option><option>dashed</option><option>dotted</option></select>
+            </div>
+            <div class="field"><label>color</label><input type="color" data-p="border-color"></div>
+            <div class="field"><label>radius (px)</label><input type="number" data-p="border-radius"></div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <h4>Alignment</h4>
+          <div class="align-row" id="alignRow">
+            <button data-a="left">⯇</button>
+            <button data-a="center">≡</button>
+            <button data-a="right">⯈</button>
+            <button data-a="justify">☰</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<div class="toast" id="toast">Saved — 1 sendWidgetUpdate sent</div>
+<div class="legend">Mockup — breakpoint values are simulated (desktop-down cascade) to demo the UX; real build uses live <code>@media</code> rules.</div>
+
+<script>
+(function(){
+  const stage      = document.getElementById('stage');
+  const selOverlay = document.getElementById('sel-overlay');
+  const hoverOv    = document.getElementById('hover-overlay');
+  const emptyState = document.getElementById('emptyState');
+  const editState  = document.getElementById('editState');
+  const selTag     = document.getElementById('selTag');
+  const selClass   = document.getElementById('selClass');
+  const affects    = document.getElementById('affects');
+  const affectsN   = document.getElementById('affectsN');
+  const bpTarget   = document.getElementById('bpTarget');
+  const saveBtn    = document.getElementById('saveBtn');
+  const discardBtn = document.getElementById('discardBtn');
+  const dirtyDot   = document.getElementById('dirtyDot');
+  const dirtyText  = document.getElementById('dirtyText');
+  const toast      = document.getElementById('toast');
+  const deviceLabel= document.getElementById('deviceLabel');
+
+  let selected = null;          // selected element
+  let activeBp = 'desktop';     // desktop | tablet | mobile
+  let dirty = false;
+
+  // per-class, per-breakpoint override model: model[cls][bp][prop] = value
+  const model = {};
+  // original cssText per class rule (so device switch recomputes desktop-down)
+  const original = {};
+
+  function rulesForClass(cls){
+    const out = [];
+    for(const sheet of document.styleSheets){
+      let rules; try{ rules = sheet.cssRules }catch(e){ continue; }
+      if(!rules) continue;
+      for(const r of rules){
+        if(r.selectorText && r.selectorText.split(',').some(s=>s.trim()==='.'+cls)) out.push(r);
+      }
+    }
+    return out;
+  }
+  function primaryRule(cls){ return rulesForClass(cls)[0] || null; }
+
+  function snapshot(cls){
+    if(original[cls]!==undefined) return;
+    const r = primaryRule(cls);
+    original[cls] = r ? r.style.cssText : '';
+  }
+
+  // recompute live rule = original + desktop + (tablet if >=tablet) + (mobile if mobile)
+  function applyLive(cls){
+    const r = primaryRule(cls); if(!r) return;
+    r.style.cssText = original[cls] || '';
+    const layers = ['desktop'];
+    if(activeBp==='tablet'||activeBp==='mobile') layers.push('tablet');
+    if(activeBp==='mobile') layers.push('mobile');
+    const m = model[cls] || {};
+    for(const bp of layers){
+      const o = m[bp]; if(!o) continue;
+      for(const p in o){ try{ r.style.setProperty(p, o[p]); }catch(e){} }
+    }
+  }
+
+  function setDirty(on){
+    dirty = on;
+    dirtyDot.classList.toggle('on', on);
+    dirtyText.textContent = on ? 'Unsaved changes' : 'No unsaved changes';
+    saveBtn.disabled = !on; discardBtn.disabled = !on;
+  }
+
+  function positionOverlay(ov, el){
+    const s = stage.getBoundingClientRect(), b = el.getBoundingClientRect();
+    ov.style.display='block';
+    ov.style.left=(b.left-s.left)+'px'; ov.style.top=(b.top-s.top)+'px';
+    ov.style.width=b.width+'px'; ov.style.height=b.height+'px';
+  }
+
+  const px = v => Math.round(parseFloat(v)||0);
+  function setVal(prop,val){ const el=document.querySelector('[data-p="'+prop+'"]'); if(el) el.value=val; }
+
+  function refreshControls(){
+    if(!selected) return;
+    const cs = getComputedStyle(selected);
+    ['padding-top','padding-right','padding-bottom','padding-left',
+     'margin-top','margin-right','margin-bottom','margin-left',
+     'font-size','border-width','border-radius','letter-spacing'].forEach(p=>setVal(p, px(cs.getPropertyValue(p))));
+    setVal('color', rgbToHex(cs.color));
+    setVal('background-color', rgbToHex(cs.backgroundColor));
+    setVal('border-color', rgbToHex(cs.borderTopColor));
+    setVal('font-weight', String(cs.fontWeight)||'400');
+    setVal('border-style', cs.borderTopStyle||'none');
+    const lh = cs.lineHeight==='normal' ? 1.4 : (parseFloat(cs.lineHeight)/parseFloat(cs.fontSize));
+    setVal('line-height-u', (Math.round(lh*10)/10));
+    // text
+    const t = directText(selected);
+    document.getElementById('cText').value = t;
+    // alignment
+    document.querySelectorAll('#alignRow button').forEach(b=>b.classList.toggle('active', b.dataset.a===cs.textAlign || (cs.textAlign==='start'&&b.dataset.a==='left')));
+  }
+
+  function directText(el){
+    let t=''; el.childNodes.forEach(n=>{ if(n.nodeType===3) t+=n.textContent; }); return t.trim();
+  }
+  function rgbToHex(rgb){
+    const m=(rgb||'').match(/\d+/g); if(!m) return '#000000';
+    return '#'+m.slice(0,3).map(x=>(+x).toString(16).padStart(2,'0')).join('');
+  }
+
+  function select(el){
+    selected = el;
+    const cls = el.dataset.cls || (el.classList[0]||'');
+    snapshot(cls);
+    selTag.textContent = el.tagName.toLowerCase();
+    selClass.textContent = '.'+cls;
+    const n = document.querySelectorAll('.'+cls).length;
+    affectsN.textContent = n;
+    affects.classList.toggle('on', n>1);
+    emptyState.style.display='none'; editState.style.display='block';
+    positionOverlay(selOverlay, el);
+    refreshControls();
+  }
+
+  function edit(prop, cssProp, value){
+    if(!selected) return;
+    const cls = selected.dataset.cls || selected.classList[0];
+    (model[cls] = model[cls]||{});
+    (model[cls][activeBp] = model[cls][activeBp]||{});
+    model[cls][activeBp][cssProp]=value;
+    applyLive(cls);
+    positionOverlay(selOverlay, selected);
+    setDirty(true);
+  }
+
+  // ── wire controls ──
+  document.querySelectorAll('[data-p]').forEach(input=>{
+    input.addEventListener('input', ()=>{
+      const p=input.dataset.p, v=input.value;
+      if(p==='line-height-u'){ edit(p,'line-height', v); return; }
+      if(['padding-top','padding-right','padding-bottom','padding-left','margin-top','margin-right','margin-bottom','margin-left','font-size','border-width','border-radius','letter-spacing'].includes(p)){
+        edit(p,p, (parseFloat(v)||0)+'px'); return;
+      }
+      edit(p,p,v);
+    });
+  });
+  document.getElementById('cText').addEventListener('input', e=>{
+    if(!selected) return;
+    selected.childNodes.forEach(n=>{ if(n.nodeType===3) n.textContent=''; });
+    selected.insertBefore(document.createTextNode(e.target.value), selected.firstChild);
+    positionOverlay(selOverlay, selected); setDirty(true);
+  });
+  document.querySelectorAll('#alignRow button').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      document.querySelectorAll('#alignRow button').forEach(x=>x.classList.remove('active'));
+      b.classList.add('active'); edit('text-align','text-align', b.dataset.a);
+    });
+  });
+
+  // ── selection events on preview ──
+  stage.addEventListener('click', e=>{
+    let el = e.target.closest('[data-editable]');   // class-less child → nearest classed ancestor
+    if(el){ e.stopPropagation(); select(el); }
+  });
+  stage.addEventListener('mousemove', e=>{
+    const el = e.target.closest('[data-editable]');
+    if(el && el!==selected){ positionOverlay(hoverOv, el); } else { hoverOv.style.display='none'; }
+  });
+  stage.addEventListener('mouseleave', ()=> hoverOv.style.display='none');
+
+  // ── breakpoint switching (panel pills + device toggle) ──
+  function setBp(bp){
+    activeBp=bp;
+    bpTarget.textContent = bp==='desktop' ? 'base styles' : '@media (max-width:'+(bp==='tablet'?'1024':'768')+'px)';
+    document.querySelectorAll('#bpRow button').forEach(b=>b.classList.toggle('active', b.dataset.bp===bp));
+    document.querySelectorAll('#deviceToggle button').forEach(b=>b.classList.toggle('active', b.dataset.bp===bp));
+    // recompute every touched class for the new breakpoint
+    Object.keys(model).forEach(applyLive);
+    if(selected){ positionOverlay(selOverlay, selected); refreshControls(); }
+  }
+  document.querySelectorAll('#bpRow button').forEach(b=> b.addEventListener('click', ()=>{ setDeviceWidth(b.dataset.bp); setBp(b.dataset.bp); }));
+  document.getElementById('deviceToggle').addEventListener('click', e=>{
+    const b=e.target.closest('button'); if(!b) return;
+    setDeviceWidth(b.dataset.bp); setBp(b.dataset.bp);
+  });
+  function setDeviceWidth(bp){
+    const w = bp==='tablet'?834 : bp==='mobile'?390 : 1280;
+    stage.style.width = w+'px';
+    deviceLabel.textContent = w+'px · '+bp.charAt(0).toUpperCase()+bp.slice(1);
+  }
+
+  // ── save / discard ──
+  saveBtn.addEventListener('click', ()=>{
+    setDirty(false);
+    toast.classList.add('show'); setTimeout(()=>toast.classList.remove('show'),1600);
+  });
+  discardBtn.addEventListener('click', ()=>{
+    Object.keys(model).forEach(cls=>{ const r=primaryRule(cls); if(r) r.style.cssText=original[cls]||''; delete model[cls]; });
+    setDirty(false);
+    if(selected){ positionOverlay(selOverlay, selected); refreshControls(); }
+  });
+
+  // keyboard: Esc deselect
+  document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ selected=null; selOverlay.style.display='none'; emptyState.style.display='block'; editState.style.display='none'; }});
+  window.addEventListener('resize', ()=>{ if(selected) positionOverlay(selOverlay, selected); });
+})();
+</script>
+</body>
+</html>
